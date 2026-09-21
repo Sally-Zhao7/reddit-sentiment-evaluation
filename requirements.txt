@@ -1,0 +1,13 @@
+# Core: bot + baseline sentiment models + the custom PyTorch model + evaluation + tests
+praw>=7.7,<8
+python-dotenv>=1.0,<2
+textblob>=0.18,<0.19
+vaderSentiment>=3.3,<4
+pandas>=2.0
+scikit-learn>=1.3
+pytest>=7.4
+torch>=2.2
+
+# Note: only the pretrained Hugging Face transformer model needs its own
+# requirements file (requirements-transformer.txt) - it needs the
+# `transformers` package on top of torch, which torch alone doesn't pull in.

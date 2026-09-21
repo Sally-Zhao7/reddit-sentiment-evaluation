@@ -1,0 +1,5 @@
+# Install separately: pip install -r requirements-transformer.txt
+# Only needed to run/evaluate the pretrained Hugging Face transformer model.
+# (torch itself is already in requirements.txt, since the custom PyTorch
+# baseline needs it too.)
+transformers>=4.40,<5
