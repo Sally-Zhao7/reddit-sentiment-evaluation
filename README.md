@@ -1,5 +1,7 @@
 # Reddit Sentiment Evaluation
 
+![tests](https://github.com/Sally-Zhao7/reddit-sentiment-evaluation/actions/workflows/tests.yml/badge.svg)
+
 A modular sentiment-analysis project comparing lexicon-based methods, a custom PyTorch classifier, and a pretrained Transformer on the same held-out dataset, with a Reddit bot as the original application.
 
 This began as a 2024 course project: a Reddit bot that used TextBlob sentiment polarity to recommend colors. In Sep 2026, I extended it into a reproducible model-evaluation pipeline with a trainable PyTorch baseline, additional sentiment models, testing, and more reliable Reddit API handling.
