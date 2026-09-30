@@ -19,7 +19,7 @@ All four approaches were evaluated on the same **12,284-example held-out TweetEv
 
 The custom PyTorch classifier improved macro F1 over both lexicon-based baselines while maintaining low CPU inference latency. The pretrained Transformer achieved the strongest predictive performance, but with substantially higher latency.
 
-Latency was measured per example on the local CPU used for this evaluation, with batch size 1, so the values should be treated as machine-specific rather than universal benchmarks.
+Latency was measured per example on the local CPU used for this evaluation, with batch size 1, which matches how the Reddit bot processes one post at a time. The values should be treated as machine-specific: on a GPU or with batching, the Transformer would be much faster.
 
 ## Models
 
@@ -167,8 +167,15 @@ pytest
 
 ## Limitations
 
-This is not a fully controlled architecture comparison. TextBlob and VADER require no supervised training, the custom PyTorch model is trained on TweetEval's training distribution, and the pretrained Transformer was developed for similar short social-media sentiment data.
+- **Not a fully controlled comparison.** TextBlob and VADER need no supervised training, the custom PyTorch model is trained on TweetEval's training split, and the pretrained Transformer was built for short social-media sentiment and is likely fine-tuned on TweetEval-style data, so it is very in-domain.
+- **Simple architecture.** The custom classifier uses mean pooling, so it loses word order. A Transformer uses attention, so each word can use the context of the other words.
+- **Fixed thresholds.** Polarity above 0.05 is positive, below -0.05 is negative, and in between is neutral. This is VADER's standard convention; TextBlob reuses it for consistency. The cutoff was not tuned.
+- **No checkpoint selection.** Training runs for 5 epochs and saves the final epoch, not the best validation epoch.
+- **Machine-specific latency.** Measured on a local CPU with batch size 1.
+- The Reddit bot is a portfolio-scale application rather than a production-scale service.
 
-The custom PyTorch classifier is intentionally simple and uses mean pooling rather than attention or recurrence. TextBlob/VADER class thresholds are modeling choices, and latency measurements depend on the local CPU and single-example inference setup.
+## Future Work
 
-The Reddit bot is a portfolio-scale application rather than a production-scale service.
+- Sweep the polarity cutoff on the validation set (not the test set), focusing on the neutral class.
+- Save the best-validation checkpoint or add early stopping.
+- Replace mean pooling with an attention-based encoder.
