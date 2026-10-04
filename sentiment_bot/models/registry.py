@@ -7,6 +7,7 @@ from .base import SentimentModel
 from .textblob_model import TextBlobModel
 from .vader_model import VaderModel
 from .transformer_model import TransformerModel
+from .finetuned_model import FinetunedTransformerModel
 from .pytorch_model import PyTorchModel
 
 MODEL_REGISTRY: dict[str, Callable[[], SentimentModel]] = {
@@ -14,6 +15,7 @@ MODEL_REGISTRY: dict[str, Callable[[], SentimentModel]] = {
     "vader": VaderModel,
     "pytorch": PyTorchModel,
     "transformer": TransformerModel,
+    "finetuned": FinetunedTransformerModel,
 }
 
 
