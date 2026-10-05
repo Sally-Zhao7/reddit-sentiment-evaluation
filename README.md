@@ -2,34 +2,38 @@
 
 ![tests](https://github.com/Sally-Zhao7/reddit-sentiment-evaluation/actions/workflows/tests.yml/badge.svg)
 
-A modular sentiment-analysis project comparing lexicon-based methods, a custom PyTorch classifier, and a pretrained Transformer on the same held-out dataset, with a Reddit bot as the original application.
+An accuracy-vs-latency evaluation of sentiment models — lexicon baselines, a lightweight PyTorch classifier, and a DistilRoBERTa I fine-tuned — on the same held-out dataset, with a Reddit bot as the original application.
 
-This began as a 2024 course project: a Reddit bot that used TextBlob sentiment polarity to recommend colors. In Sep 2026, I extended it into a reproducible model-evaluation pipeline with a trainable PyTorch baseline, additional sentiment models, testing, and more reliable Reddit API handling.
+This began as a 2024 course project: a Reddit bot that used TextBlob sentiment polarity to recommend colors. In Sep 2026, I extended it into a reproducible model-evaluation pipeline with a trainable PyTorch baseline, a fine-tuned Transformer, additional sentiment models, testing, and more reliable Reddit API handling.
 
 ## Results
 
-All four approaches were evaluated on the same **12,284-example held-out TweetEval sentiment test split**.
+All models were evaluated on the same **12,284-example held-out TweetEval sentiment test split**. Macro recall is the official TweetEval sentiment metric.
 
-| Model | Accuracy | Macro Precision | Macro Recall | Macro F1 | Avg. Latency |
-|---|---:|---:|---:|---:|---:|
-| TextBlob | 0.487 | 0.495 | 0.490 | 0.464 | 0.11 ms |
-| VADER | 0.530 | 0.546 | 0.570 | 0.529 | 0.04 ms |
-| Custom PyTorch | 0.576 | 0.565 | 0.578 | 0.571 | 0.10 ms |
-| Transformer | 0.723 | 0.720 | 0.734 | 0.725 | 17.48 ms |
+| Model | Accuracy | Macro Recall | Macro F1 | CPU time / 1k texts |
+|---|---:|---:|---:|---:|
+| TextBlob | 0.487 | 0.490 | 0.464 | 0.15 s |
+| VADER | 0.530 | 0.570 | 0.529 | 0.06 s |
+| Custom PyTorch (lightweight) | 0.576 | 0.578 | 0.571 | 0.11 s |
+| DistilRoBERTa, fine-tuned here | 0.702 | 0.723 | 0.703 | 27.0 s |
+| Twitter-RoBERTa (off the shelf, reference) | 0.723 | 0.734 | 0.725 | — |
 
-The custom PyTorch classifier improved macro F1 over both lexicon-based baselines while maintaining low CPU inference latency. The pretrained Transformer achieved the strongest predictive performance, but with substantially higher latency.
+**Accuracy vs. latency.** Fine-tuning DistilRoBERTa on the same 45,615 training examples raises macro F1 from 0.571 to 0.703. The lightweight PyTorch model is about 13 points lower but **~240× faster** on CPU, which suits a bot that scores every incoming post on cheap hardware; the fine-tuned model is the choice when accuracy matters more than cost.
 
-Latency was measured per example on the local CPU used for this evaluation, with batch size 1, which matches how the Reddit bot processes one post at a time. The values should be treated as machine-specific: on a GPU or with batching, the Transformer would be much faster.
+The off-the-shelf `cardiffnlp/twitter-roberta-base-sentiment-latest` scores highest, but it was pretrained on tweets and trained by its authors on TweetEval-style data, so it is a reference ceiling rather than a like-for-like comparison. Its scores come from an earlier run of the same evaluator; it was not re-timed on the machine used for the latency column.
+
+Latency is per example with batch size 1 (how the bot processes one post at a time) on a single CPU, reported per 1,000 texts. Treat it as relative, not absolute: on a GPU or with batching, the Transformers would be much faster.
 
 ## Models
 
-All four models implement the same `SentimentModel` interface and output `negative`, `neutral`, or `positive`.
+All models implement the same `SentimentModel` interface and output `negative`, `neutral`, or `positive`.
 
 | Model | Approach |
 |---|---|
 | `textblob` | Original lexicon-based baseline using TextBlob polarity |
 | `vader` | Lexicon-based sentiment model designed for social-media text |
 | `pytorch` | Custom classifier trained from scratch on TweetEval |
+| `finetuned` | `distilroberta-base` fine-tuned on TweetEval train (2 epochs, free Colab T4) with `scripts/finetune_transformer.py` |
 | `transformer` | Pretrained `cardiffnlp/twitter-roberta-base-sentiment-latest` model used for inference |
 
 The custom PyTorch classifier uses:
@@ -65,7 +69,7 @@ The main benchmark uses the public **TweetEval sentiment task**.
 |---|---|
 | `train` | Builds the PyTorch vocabulary and trains model weights |
 | `val` | Monitors performance during training |
-| `test` | Held out until final evaluation of all four approaches |
+| `test` | Held out until final evaluation of all models |
 
 The PyTorch vocabulary is built only from the training split. Validation examples are not used to update model weights, and the test split is reserved for final evaluation.
 
