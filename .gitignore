@@ -28,3 +28,5 @@ checkpoints/*.pt
 .DS_Store
 .idea/
 .vscode/
+
+checkpoints/distilroberta-tweeteval*/
