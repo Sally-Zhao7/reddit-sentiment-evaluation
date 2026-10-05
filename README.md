@@ -56,6 +56,7 @@ The extended project adds:
 - a common interface for interchangeable sentiment models
 - VADER and pretrained Transformer baselines
 - a custom trainable PyTorch sentiment classifier
+- a DistilRoBERTa model fine-tuned on the same training split, for a like-for-like accuracy–latency comparison
 - evaluation using accuracy, precision, recall, macro F1, confusion matrices, and inference latency
 - train/validation/test separation
 - rate-limit-aware retry/backoff and bot-specific duplicate-reply detection
@@ -67,11 +68,11 @@ The main benchmark uses the public **TweetEval sentiment task**.
 
 | Split | Usage |
 |---|---|
-| `train` | Builds the PyTorch vocabulary and trains model weights |
+| `train` | Builds the PyTorch vocabulary and trains weights for both the custom PyTorch model and the fine-tuned DistilRoBERTa |
 | `val` | Monitors performance during training |
 | `test` | Held out until final evaluation of all models |
 
-The PyTorch vocabulary is built only from the training split. Validation examples are not used to update model weights, and the test split is reserved for final evaluation.
+The PyTorch vocabulary is built only from the training split. Validation examples are not used to update model weights, and the test split is reserved for final evaluation. Both trained models see exactly the same 45,615 training examples.
 
 `data/smoke_test_sample.csv` is a small synthetic dataset used only to verify that the pipeline runs end to end; it is not used for reported benchmark results.
 
@@ -81,7 +82,8 @@ The PyTorch vocabulary is built only from the training split. Validation example
                          ┌─ TextBlob
                          ├─ VADER
 Input text ──► Model ────┼─ Custom PyTorch
-                         └─ Transformer
+                         ├─ Fine-tuned DistilRoBERTa
+                         └─ Twitter-RoBERTa (reference)
               │
               ▼
      SentimentPrediction
@@ -100,12 +102,16 @@ The offline evaluator and Reddit bot share the same model interface, so model im
 
 ```text
 reddit-sentiment-evaluation/
+├── .github/workflows/          # CI: runs the test suite on every push
+├── checkpoints/                # trained weights (gitignored)
 ├── data/                       # smoke-test data; TweetEval downloads are gitignored
 ├── legacy/                     # original 2024 bot
+├── results/                    # evaluation output JSON
 ├── scripts/
-│   └── prepare_tweet_eval.py
+│   ├── prepare_tweet_eval.py   # downloads TweetEval splits to CSV
+│   └── finetune_transformer.py # fine-tunes DistilRoBERTa (Colab-friendly)
 ├── sentiment_bot/
-│   ├── models/                 # TextBlob, VADER, PyTorch, Transformer wrappers
+│   ├── models/                 # TextBlob, VADER, PyTorch, fine-tuned and pretrained Transformer wrappers
 │   ├── torch_sentiment/        # dataset, model, and training loop
 │   ├── evaluation/             # metrics and comparison runner
 │   └── reddit/                 # Reddit client and bot logic
@@ -139,10 +145,27 @@ python -m sentiment_bot.torch_sentiment.train --train data/tweeteval_train.csv -
 
 The training pipeline builds its vocabulary from the training split, uses `CrossEntropyLoss` and Adam optimization, reports train/validation loss and accuracy after each epoch, and saves the model weights, vocabulary, and architecture configuration.
 
+## Fine-tune DistilRoBERTa
+
+Fine-tuning needs a GPU; it was run on a free Colab T4 (about 15–25 minutes for 2 epochs). It uses the same train/val CSVs as the PyTorch model and never touches the test split.
+
+```bash
+pip install datasets accelerate
+python scripts/finetune_transformer.py \
+    --train data/tweeteval_train.csv --val data/tweeteval_val.csv \
+    --out checkpoints/distilroberta-tweeteval
+```
+
+The evaluator loads the `finetuned` model from `checkpoints/distilroberta-tweeteval`. If you train on Colab, download that folder into `checkpoints/` before running the evaluation.
+
 ## Run the Evaluation
 
 ```bash
+# all registered models
 python -m sentiment_bot.evaluation.runner --data data/tweeteval_test.csv
+
+# or a subset
+python -m sentiment_bot.evaluation.runner --data data/tweeteval_test.csv --models pytorch finetuned
 ```
 
 The evaluator reports accuracy, macro precision/recall/F1, confusion matrices, and average inference latency.
@@ -171,10 +194,10 @@ pytest
 
 ## Limitations
 
-- **Not a fully controlled comparison.** TextBlob and VADER need no supervised training, the custom PyTorch model is trained on TweetEval's training split, and the pretrained Transformer was built for short social-media sentiment and is likely fine-tuned on TweetEval-style data, so it is very in-domain.
+- **Not a fully controlled comparison.** TextBlob and VADER need no supervised training; the custom PyTorch model and the fine-tuned DistilRoBERTa are trained on the same TweetEval training split, which makes those two a like-for-like pair. The off-the-shelf Twitter-RoBERTa was built for short social-media sentiment and is likely trained on TweetEval-style data, so it is a reference ceiling rather than a fair comparison.
 - **Simple architecture.** The custom classifier uses mean pooling, so it loses word order. A Transformer uses attention, so each word can use the context of the other words.
 - **Fixed thresholds.** Polarity above 0.05 is positive, below -0.05 is negative, and in between is neutral. This is VADER's standard convention; TextBlob reuses it for consistency. The cutoff was not tuned.
-- **No checkpoint selection.** Training runs for 5 epochs and saves the final epoch, not the best validation epoch.
+- **No checkpoint selection for the PyTorch model.** It trains for 5 epochs and saves the final epoch, not the best validation epoch.
 - **Machine-specific latency.** Measured on a local CPU with batch size 1.
 - The Reddit bot is a portfolio-scale application rather than a production-scale service.
 
@@ -183,3 +206,5 @@ pytest
 - Sweep the polarity cutoff on the validation set (not the test set), focusing on the neutral class.
 - Save the best-validation checkpoint or add early stopping.
 - Replace mean pooling with an attention-based encoder.
+- Repeat training with several random seeds and report the variance of the scores.
+- Measure batched and GPU latency alongside the batch-size-1 CPU numbers.
